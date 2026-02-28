@@ -1,11 +1,11 @@
 import React from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Menu, Bell, User, Globe } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Menu, Bell, User, Globe, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { cn } from '../utils';
 
 export default function Layout() {
-  const { store } = useStore();
+  const { store, syncStatus } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -35,6 +35,11 @@ export default function Layout() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center mr-1" title={syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Sync Error'}>
+              {syncStatus === 'synced' && <Cloud size={18} className="text-green-500" />}
+              {syncStatus === 'syncing' && <RefreshCw size={18} className="text-blue-500 animate-spin" />}
+              {syncStatus === 'error' && <CloudOff size={18} className="text-red-500" />}
+            </div>
             <button className="p-2 text-gray-500 hover:bg-gray-100 rounded-full">
               <Bell size={20} />
             </button>

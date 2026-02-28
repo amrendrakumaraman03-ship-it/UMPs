@@ -121,14 +121,37 @@ export default function Khata() {
               </div>
           </Card>
 
-          {/* Recovery Rate Card */}
+          {/* Risk Meter Card */}
           <Card className="p-4">
-              <h3 className="font-bold text-gray-900 mb-2">Recovery Rate</h3>
-              <div className="text-center py-2">
-                  <h1 className="text-4xl font-bold text-red-600">{recoveryRate.toFixed(1)}%</h1>
-                  <p className="text-xs text-gray-500 mt-1">₹0.00 / ₹0.00</p>
+              <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-bold text-gray-900">Credit Risk Meter</h3>
+                  <Badge variant="default" className="text-xs">Receivable vs Total Credit</Badge>
+              </div>
+              <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden mb-2">
+                  <div 
+                    className={`absolute top-0 left-0 h-full transition-all duration-500 ${
+                        recoveryRate > 80 ? 'bg-green-500' : recoveryRate > 50 ? 'bg-yellow-500' : 'bg-red-500'
+                    }`}
+                    style={{ width: `${recoveryRate}%` }}
+                  />
+              </div>
+              <div className="flex justify-between text-[10px] text-gray-500">
+                  <span>Recovered: {recoveryRate.toFixed(1)}%</span>
+                  <span>Risk: {(100 - recoveryRate).toFixed(1)}%</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+                  <div>
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Total Credit Given</p>
+                      <p className="text-lg font-bold text-red-600">{formatCurrency(totalCredits)}</p>
+                  </div>
+                  <div>
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Total Receivable</p>
+                      <p className="text-lg font-bold text-gray-900">{formatCurrency(totalReceivable)}</p>
+                  </div>
               </div>
           </Card>
+
+          {/* Recovery Rate Card - Replaced by Risk Meter above, or keep both? Let's keep one good one. */}
 
           {/* Debtors List Header */}
           <h3 className="font-bold text-gray-900 pt-2">Debtors</h3>

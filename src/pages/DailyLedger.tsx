@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Card, Button, Input, Badge } from '../components/ui';
 import { formatCurrency } from '../utils';
-import { Calendar, History, RefreshCw, Save, ArrowLeft } from 'lucide-react';
+import { Calendar, History, RefreshCw, Save, ArrowLeft, CheckCircle, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export default function DailyLedger() {
   const navigate = useNavigate();
-  const { orders, expenses } = useStore();
+  const { orders, expenses, dailyLedgers, saveDailyLedger } = useStore();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [autoMode, setAutoMode] = useState(true);
   
@@ -19,6 +19,8 @@ export default function DailyLedger() {
   const [todayExpenses, setTodayExpenses] = useState(0);
   const [actualCash, setActualCash] = useState(0);
   const [bankDeposit, setBankDeposit] = useState(0);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   // Auto-fetch logic
   const fetchDailyData = () => {
@@ -44,13 +46,41 @@ export default function DailyLedger() {
     setOnlineSales(online);
     setCreditSales(credit);
     setTodayExpenses(expenseTotal);
+
+    // Auto-fetch opening balance from previous day
+    const previousDate = new Date(selectedDate);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const previousDateStr = previousDate.toISOString().split('T')[0];
+    const previousLedger = dailyLedgers.find(l => l.date === previousDateStr);
+    if (previousLedger) {
+        setOpeningBalance(previousLedger.closingBalance);
+    } else {
+        setOpeningBalance(0);
+    }
+
+    // If there is already a saved ledger for today, populate actual cash and bank deposit
+    const todayLedger = dailyLedgers.find(l => l.date === date);
+    if (todayLedger) {
+        setActualCash(todayLedger.actualCash);
+        setBankDeposit(todayLedger.bankDeposit);
+        if (!autoMode) {
+            setOpeningBalance(todayLedger.openingBalance);
+            setGrossSales(todayLedger.grossSales);
+            setOnlineSales(todayLedger.onlineSales);
+            setCreditSales(todayLedger.creditSales);
+            setTodayExpenses(todayLedger.expenses);
+        }
+    } else {
+        setActualCash(0);
+        setBankDeposit(0);
+    }
   };
 
   useEffect(() => {
     if (autoMode) {
       fetchDailyData();
     }
-  }, [date, autoMode, orders, expenses]);
+  }, [date, autoMode, orders, expenses, dailyLedgers]);
 
   // Calculations
   // Expected Cash = Opening + (Gross - Online - Credit) - Expenses - BankDeposit
@@ -59,6 +89,24 @@ export default function DailyLedger() {
   const expectedCash = openingBalance + cashSales - todayExpenses - bankDeposit;
   const difference = actualCash - expectedCash;
   const closingBalance = actualCash; // Usually actual cash in hand is the closing balance carried forward
+
+  const handleSave = () => {
+      saveDailyLedger({
+          date,
+          openingBalance,
+          grossSales,
+          onlineSales,
+          creditSales,
+          expenses: todayExpenses,
+          actualCash,
+          bankDeposit,
+          expectedCash,
+          difference,
+          closingBalance
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+  };
 
   return (
     <div className="space-y-4">
@@ -73,7 +121,7 @@ export default function DailyLedger() {
                 <p className="text-xs text-gray-500">End-of-day cash reconciliation</p>
             </div>
         </div>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" onClick={() => setShowHistory(true)}>
             <History size={16} className="mr-1" /> History
         </Button>
       </div>
@@ -190,11 +238,75 @@ export default function DailyLedger() {
             <p className="text-2xl font-bold text-purple-700">{formatCurrency(closingBalance)}</p>
         </div>
 
-        <Button className="w-full h-12 text-lg bg-blue-600 hover:bg-blue-700 text-white">
-            <Save size={20} className="mr-2" /> Save Daily Ledger
+        <Button 
+            className={`w-full h-12 text-lg text-white transition-colors ${saveSuccess ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}`} 
+            onClick={handleSave}
+            disabled={saveSuccess}
+        >
+            {saveSuccess ? (
+                <>
+                    <CheckCircle size={20} className="mr-2" /> Saved Successfully!
+                </>
+            ) : (
+                <>
+                    <Save size={20} className="mr-2" /> Save Daily Ledger
+                </>
+            )}
         </Button>
 
       </Card>
+
+      {/* History Modal */}
+      {showHistory && (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+              <div className="bg-white w-full max-w-lg rounded-2xl p-6 max-h-[80vh] flex flex-col">
+                  <div className="flex justify-between items-center mb-4">
+                      <h3 className="font-bold text-lg">Daily Ledger History</h3>
+                      <button onClick={() => setShowHistory(false)}><X size={20} /></button>
+                  </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-3">
+                      {dailyLedgers.length === 0 ? (
+                          <div className="text-center py-10 text-gray-500">
+                              <History className="mx-auto mb-2 opacity-20" size={48} />
+                              <p>No daily ledgers saved yet.</p>
+                          </div>
+                      ) : (
+                          dailyLedgers
+                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                            .map(ledger => (
+                              <Card key={ledger.id} className="p-4 bg-gray-50">
+                                  <div className="flex justify-between items-center mb-3 pb-2 border-b border-gray-200">
+                                      <span className="font-bold text-gray-900">{new Date(ledger.date).toLocaleDateString('en-IN', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                                      <span className={`text-xs font-bold px-2 py-1 rounded-full ${ledger.difference === 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                          Diff: {ledger.difference > 0 ? '+' : ''}{formatCurrency(ledger.difference)}
+                                      </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-2 text-sm">
+                                      <div>
+                                          <p className="text-gray-500 text-xs">Opening Balance</p>
+                                          <p className="font-medium">{formatCurrency(ledger.openingBalance)}</p>
+                                      </div>
+                                      <div>
+                                          <p className="text-gray-500 text-xs">Gross Sales</p>
+                                          <p className="font-medium">{formatCurrency(ledger.grossSales)}</p>
+                                      </div>
+                                      <div>
+                                          <p className="text-gray-500 text-xs">Actual Cash</p>
+                                          <p className="font-medium">{formatCurrency(ledger.actualCash)}</p>
+                                      </div>
+                                      <div>
+                                          <p className="text-gray-500 text-xs">Closing Balance</p>
+                                          <p className="font-bold text-purple-700">{formatCurrency(ledger.closingBalance)}</p>
+                                      </div>
+                                  </div>
+                              </Card>
+                          ))
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 }

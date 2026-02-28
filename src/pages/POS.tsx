@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Button, Input, Card, Badge } from '../components/ui';
 import { formatCurrency } from '../utils';
-import { Search, Trash2, Plus, Minus, CreditCard, Banknote, Smartphone, User, X, ShoppingBag, AlertCircle, Calendar } from 'lucide-react';
+import { Search, Trash2, Plus, Minus, CreditCard, Banknote, Smartphone, User, X, ShoppingBag, AlertCircle, Calendar, Percent } from 'lucide-react';
 import { Product, CartItem, PaymentMode, Customer, Batch } from '../types';
 
 export default function POS() {
@@ -12,6 +12,8 @@ export default function POS() {
   const [showPayment, setShowPayment] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showDiscountModal, setShowDiscountModal] = useState<{batchId: string, currentDiscount: number, mrp: number} | null>(null);
+  const [discountInput, setDiscountInput] = useState('');
   const [billDate, setBillDate] = useState(() => {
     const d = new Date();
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -31,9 +33,9 @@ export default function POS() {
 
   // FEFO Logic: Find batches for product, sort by expiry, allocate stock
   const addToCart = (product: Product) => {
-    // 1. Get all batches for this product with stock > 0
+    // 1. Get all batches for this product with stock > 0 OR onlineStock > 0
     const availableBatches = batches
-      .filter(b => b.productId === product.id && b.stock > 0)
+      .filter(b => b.productId === product.id && (b.stock > 0 || (b.onlineStock || 0) > 0))
       .sort((a, b) => new Date(a.expiryDate).getTime() - new Date(b.expiryDate).getTime());
 
     if (availableBatches.length === 0) {
@@ -45,22 +47,39 @@ export default function POS() {
     const inCartQty = cart.filter(item => item.productId === product.id).reduce((sum, item) => sum + item.quantity, 0);
     
     // 3. Find the next batch to take from
-    // We need to simulate taking 'inCartQty + 1' items.
     let needed = inCartQty + 1;
     let selectedBatch: Batch | null = null;
     
     for (const batch of availableBatches) {
-      if (batch.stock >= needed) {
+      const totalAvailable = batch.stock + (batch.onlineStock || 0);
+      if (totalAvailable >= needed) {
         selectedBatch = batch;
         break;
       } else {
-        needed -= batch.stock;
+        needed -= totalAvailable;
       }
     }
 
     if (!selectedBatch) {
       alert('Insufficient stock for requested quantity');
       return;
+    }
+
+    // Warning Logic from Note
+    const physicalStock = selectedBatch.stock;
+    const booked = selectedBatch.bookedStock || 0;
+    const online = selectedBatch.onlineStock || 0;
+    
+    if (physicalStock <= 0 && online > 0) {
+        if (!confirm(`Physical stock is 0 in system, but Online Inventory has ${online} units. Using Online Inventory for this sale. Proceed?`)) {
+            return;
+        }
+    } else if (physicalStock <= booked && booked > 0) {
+        if (!confirm(`WARNING: This item is booked for an online order. Selling it will trigger the "Order Fail Protocol" (Penalty Warning). Do you want to proceed?`)) {
+            return;
+        }
+    } else if (physicalStock <= 5) {
+        alert(`Warning: Low physical stock (${physicalStock} left).`);
     }
 
     // 4. Add to cart (or increment if same batch exists)
@@ -100,6 +119,44 @@ export default function POS() {
       }
     });
     setSearch('');
+  };
+
+  const deleteItem = (batchId: string) => {
+    setCart(prev => prev.filter(item => item.batchId !== batchId));
+  };
+
+  const handleDiscountClick = (item: CartItem) => {
+    setShowDiscountModal({ batchId: item.batchId, currentDiscount: item.discount || 0, mrp: item.mrp });
+    setDiscountInput((item.discount || 0).toString());
+  };
+
+  const applyDiscount = () => {
+    if (!showDiscountModal) return;
+    
+    const discountValue = parseFloat(discountInput);
+    if (isNaN(discountValue) || discountValue < 0) {
+      alert('Please enter a valid discount amount');
+      return;
+    }
+
+    if (discountValue > showDiscountModal.mrp) {
+      alert('Discount cannot be greater than MRP');
+      return;
+    }
+
+    setCart(prev => prev.map(item => {
+      if (item.batchId === showDiscountModal.batchId) {
+        return {
+          ...item,
+          discount: discountValue,
+          finalPrice: item.mrp - discountValue
+        };
+      }
+      return item;
+    }));
+
+    setShowDiscountModal(null);
+    setDiscountInput('');
   };
 
   const updateQuantity = (batchId: string, delta: number) => {
@@ -228,12 +285,32 @@ export default function POS() {
           cart.map(item => (
             <Card key={item.batchId} className="p-3 flex justify-between items-center">
               <div className="flex-1">
-                <p className="font-medium text-gray-900">{item.name}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span className="bg-gray-100 px-1.5 rounded">Batch: {item.batchNumber}</span>
-                  <span className={new Date(item.expiryDate) < new Date() ? 'text-red-500 font-bold' : ''}>
-                    Exp: {new Date(item.expiryDate).toLocaleDateString()}
-                  </span>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <p className="font-medium text-gray-900">{item.name}</p>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <span className="bg-gray-100 px-1.5 rounded">Batch: {item.batchNumber}</span>
+                        <span className={new Date(item.expiryDate) < new Date() ? 'text-red-500 font-bold' : ''}>
+                            Exp: {new Date(item.expiryDate).toLocaleDateString()}
+                        </span>
+                        </div>
+                    </div>
+                    <div className="flex gap-1">
+                        <button 
+                            onClick={() => handleDiscountClick(item)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Add Discount"
+                        >
+                            <Percent size={16} />
+                        </button>
+                        <button 
+                            onClick={() => deleteItem(item.batchId)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remove Item"
+                        >
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                     {item.discount && item.discount > 0 ? (
@@ -333,6 +410,36 @@ export default function POS() {
           Complete Sale
         </Button>
       </div>
+
+      {/* Discount Modal */}
+      {showDiscountModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-xs rounded-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold">Apply Discount</h3>
+              <button onClick={() => setShowDiscountModal(null)}><X size={20} /></button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-500 mb-2">Original Price (MRP): {formatCurrency(showDiscountModal.mrp)}</p>
+              <Input 
+                label="Discount Amount (₹)" 
+                type="number" 
+                value={discountInput} 
+                onChange={(e) => setDiscountInput(e.target.value)}
+                autoFocus
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Final Price: {formatCurrency(Math.max(0, showDiscountModal.mrp - (parseFloat(discountInput) || 0)))}
+              </p>
+            </div>
+
+            <Button className="w-full" onClick={applyDiscount}>
+              Apply Discount
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Payment Modal */}
       {showPayment && (

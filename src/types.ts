@@ -42,6 +42,7 @@ export interface Batch {
   // Online Inventory Management
   onlineStock?: number;
   onlineStatus?: 'OFFLINE' | 'DRAFT' | 'LIVE';
+  bookedStock?: number; // Stock reserved for online orders
 }
 
 export type PaymentMode = 'Cash' | 'UPI' | 'Card' | 'Credit';
@@ -68,9 +69,43 @@ export interface Order {
   tax: number;
   total: number;
   paymentMode: PaymentMode;
-  status: 'Pending' | 'Accepted' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Completed' | 'Cancelled';
+  status: 'Pending' | 'Accepted' | 'Packed' | 'Out for Delivery' | 'Delivered' | 'Completed' | 'Cancelled' | 'Urgent';
   type: 'Online' | 'Offline';
   date: string;
+}
+
+export interface StockLedgerEntry {
+  id: string;
+  productId: string;
+  batchId: string;
+  date: string;
+  type: 'IN' | 'OUT' | 'ADJUSTMENT';
+  quantity: number;
+  reason: string; // e.g., 'Purchase', 'Sale', 'Return', 'Audit'
+  referenceId?: string; // e.g., orderId or purchaseOrderId
+}
+
+export interface Supplier {
+  id: string;
+  name: string;
+  details: string; // Address, GST, etc.
+  contact?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  date: string;
+  items: {
+    productId: string;
+    productName: string;
+    quantity: number;
+    expectedRate?: number;
+  }[];
+  status: 'Draft' | 'Sent' | 'Received' | 'Cancelled';
+  supplierId?: string;
+  supplierName?: string;
+  supplierDetails?: string;
+  vendorDetails?: string;
 }
 
 export interface LedgerEntry {
@@ -99,4 +134,19 @@ export interface Expense {
   amount: number;
   date: string;
   note?: string;
+}
+
+export interface DailyLedgerRecord {
+  id: string;
+  date: string;
+  openingBalance: number;
+  grossSales: number;
+  onlineSales: number;
+  creditSales: number;
+  expenses: number;
+  actualCash: number;
+  bankDeposit: number;
+  expectedCash: number;
+  difference: number;
+  closingBalance: number;
 }
