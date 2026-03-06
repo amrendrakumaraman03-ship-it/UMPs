@@ -6,6 +6,7 @@ import { Camera, Upload, Check, X, Loader2, FileText, ArrowRight, Save } from 'l
 import { GoogleGenAI, Type } from "@google/genai";
 import { Batch, Product } from '../types';
 import { supabase } from '../lib/supabase';
+import { suggestSubCategory } from '../utils';
 
 // Initialize Gemini Client safely
 const getGenAI = () => {
@@ -25,7 +26,7 @@ const getGenAI = () => {
 
 export default function InvoiceUpload() {
   const navigate = useNavigate();
-  const { addProduct, addBatch, products } = useStore();
+  const { addProduct, addBatch, products, updateProduct } = useStore();
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedItems, setScannedItems] = useState<any[]>([]);
   const [step, setStep] = useState<'upload' | 'review'>('upload');
@@ -116,6 +117,7 @@ export default function InvoiceUpload() {
             const prompt = `Extract invoice line items. Map columns: 
             - drugCode: 'Drug Code' col OR extract from 'Product Name' (e.g. text in parentheses like '(FG00017)').
             - productName: 'Item Name' or 'Product Name'.
+            - subCategory: Identify the drug type. If the medicine is for Blood Pressure, tag it as B.P.; if it's for Sugar, tag it as Diabetic; if it's an infection-fighter, tag it as Antibiotics.
             - batchNumber: 'Batch No' or 'Batch'.
             - expiryDate: 'Exp Date' or 'Exp'. Convert MM/YY to YYYY-MM-DD (last day of month).
             - purchaseRate: 'Rate'.
@@ -141,6 +143,7 @@ export default function InvoiceUpload() {
                             properties: {
                                 drugCode: { type: Type.STRING },
                                 productName: { type: Type.STRING },
+                                subCategory: { type: Type.STRING },
                                 batchNumber: { type: Type.STRING },
                                 expiryDate: { type: Type.STRING },
                                 quantity: { type: Type.NUMBER },
@@ -205,7 +208,9 @@ export default function InvoiceUpload() {
 
   const handleSaveItem = async (item: any) => {
     // Check if product exists locally
-    let productId = products.find(p => p.name.toLowerCase() === item.productName.toLowerCase())?.id;
+    const existingProduct = products.find(p => p.name.toLowerCase() === item.productName.toLowerCase());
+    let productId = existingProduct?.id;
+    let productToPass = existingProduct;
 
     if (!productId) {
       // Create new product locally
@@ -213,15 +218,21 @@ export default function InvoiceUpload() {
         code: item.drugCode || ('AUTO-' + Math.floor(Math.random() * 10000)),
         name: item.productName,
         category: 'Uncategorized',
+        subCategory: item.subCategory,
         unit: 'pcs',
         gstRate: item.gstRate || 12,
         minStockAlert: 10
       });
       productId = newProduct?.id;
+      productToPass = newProduct;
+    } else if (existingProduct && !existingProduct.subCategory && item.subCategory) {
+      // Update existing product with sub-category if it was missing
+      updateProduct(productId, { subCategory: item.subCategory });
+      productToPass = { ...existingProduct, subCategory: item.subCategory };
     }
 
-    if (productId) {
-        // Create Batch locally
+    if (productId && productToPass) {
+        // Create Batch locally (this also saves to Supabase)
         addBatch({
             productId: productId,
             batchNumber: item.batchNumber || 'BATCH-' + Math.floor(Math.random() * 1000),
@@ -230,24 +241,7 @@ export default function InvoiceUpload() {
             purchaseRate: item.purchaseRate,
             mrp: item.mrp,
             stock: item.quantity
-        });
-
-        // Save directly to Supabase 'inventory' table
-        try {
-            await supabase.from('inventory').insert({
-                drug_code: item.drugCode || ('AUTO-' + Math.floor(Math.random() * 10000)),
-                product_name: item.productName,
-                batch_number: item.batchNumber || 'BATCH-' + Math.floor(Math.random() * 1000),
-                expiry_date: item.expiryDate,
-                purchase_rate: item.purchaseRate,
-                mrp: item.mrp,
-                qty_offline: item.quantity,
-                qty_online: 0,
-                gst_rate: item.gstRate || 12
-            });
-        } catch (err) {
-            console.error("Error saving to Supabase inventory:", err);
-        }
+        }, productToPass);
 
         // Update local state to show saved
         setScannedItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, status: 'saved' } : i));
@@ -343,9 +337,27 @@ export default function InvoiceUpload() {
                                     value={item.productName} 
                                     onChange={(e) => {
                                         const newVal = e.target.value;
-                                        setScannedItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, productName: newVal, status: 'pending' } : i));
+                                        const suggested = suggestSubCategory(newVal);
+                                        setScannedItems(prev => prev.map(i => i.tempId === item.tempId ? { 
+                                            ...i, 
+                                            productName: newVal, 
+                                            subCategory: suggested || i.subCategory,
+                                            status: 'pending' 
+                                        } : i));
                                     }}
                                     className="h-8 text-sm"
+                                />
+                            </div>
+                            <div className="col-span-6 sm:col-span-2">
+                                <label className="text-xs text-gray-500">Sub-Category</label>
+                                <Input 
+                                    value={item.subCategory || ''} 
+                                    onChange={(e) => {
+                                        const newVal = e.target.value;
+                                        setScannedItems(prev => prev.map(i => i.tempId === item.tempId ? { ...i, subCategory: newVal, status: 'pending' } : i));
+                                    }}
+                                    className="h-8 text-sm"
+                                    placeholder="e.g. Antibiotics"
                                 />
                             </div>
                             <div className="col-span-6 sm:col-span-2">

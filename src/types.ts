@@ -11,6 +11,20 @@ export interface StoreProfile {
   timings?: string;
   onlineOrdersEnabled: boolean;
   deliveryEnabled: boolean;
+  // Storefront Designer Fields
+  logoUrl?: string;
+  bannerUrl?: string;
+  bio?: string;
+  facilities?: string[];
+  primaryColor?: string;
+}
+
+export interface VendorPost {
+  id: string;
+  storeId: string;
+  content: string;
+  imageUrl?: string;
+  createdAt: string;
 }
 
 // Master Product Definition
@@ -19,6 +33,7 @@ export interface Product {
   code: string;
   name: string;
   category: string;
+  subCategory?: string;
   unit: string;
   gstRate: number;
   minStockAlert: number;

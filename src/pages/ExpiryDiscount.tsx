@@ -42,12 +42,31 @@ export default function ExpiryDiscount() {
         <h2 className="text-xl font-bold text-gray-900">Clearance Management</h2>
       </div>
 
-      <div className="flex gap-2">
-        {['All', 'Critical', 'Near'].map(f => (
+      <div className="flex gap-2" role="tablist" aria-label="Expiry Filters">
+        {['All', 'Critical', 'Near'].map((f, index, array) => (
           <button
             key={f}
+            role="tab"
+            aria-selected={filter === f}
+            aria-controls={`tabpanel-${f}`}
+            id={`tab-${f}`}
+            tabIndex={filter === f ? 0 : -1}
             onClick={() => setFilter(f as any)}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                const nextTab = array[(index + 1) % array.length];
+                document.getElementById(`tab-${nextTab}`)?.focus();
+                setFilter(nextTab as any);
+              }
+              if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                const prevTab = array[(index - 1 + array.length) % array.length];
+                document.getElementById(`tab-${prevTab}`)?.focus();
+                setFilter(prevTab as any);
+              }
+            }}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
               filter === f ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-600'
             }`}
           >
@@ -56,7 +75,13 @@ export default function ExpiryDiscount() {
         ))}
       </div>
 
-      <div className="space-y-3">
+      <div 
+        className="space-y-3 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+        role="tabpanel"
+        id={`tabpanel-${filter}`}
+        aria-labelledby={`tab-${filter}`}
+        tabIndex={0}
+      >
         {expiryBatches.length === 0 ? (
           <div className="text-center py-10 text-gray-500">
             <Tag className="mx-auto mb-2 opacity-20" size={48} />

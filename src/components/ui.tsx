@@ -12,7 +12,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none',
+          'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none active:scale-95 hover:scale-[1.02] hover:shadow-md',
           {
             'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500': variant === 'primary',
             'bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-500': variant === 'secondary',
@@ -45,7 +45,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           className={cn(
-            'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50',
+            'flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200 focus:shadow-sm',
             error && 'border-red-500 focus:ring-red-500',
             className
           )}
@@ -57,11 +57,29 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   }
 );
 
-export const Card = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden", className)} {...props}>
-    {children}
-  </div>
-);
+export const Card = ({ className, children, onClick, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
+  const isInteractive = !!onClick;
+  return (
+    <div 
+      className={cn("bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden card transition-all duration-300 hover:shadow-lg hover:scale-[1.01]", 
+        isInteractive && "cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500",
+        className
+      )} 
+      onClick={onClick}
+      tabIndex={isInteractive ? 0 : undefined}
+      onKeyDown={isInteractive ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(e as any);
+        }
+        props.onKeyDown?.(e);
+      } : props.onKeyDown}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
 
 export const Badge = ({ children, variant = 'default', className }: { children: React.ReactNode, variant?: 'default' | 'success' | 'warning' | 'danger', className?: string }) => {
   return (

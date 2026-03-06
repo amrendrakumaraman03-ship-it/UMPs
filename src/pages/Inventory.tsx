@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { Button, Input, Card, Badge } from '../components/ui';
-import { formatCurrency } from '../utils';
-import { Search, Plus, X, ChevronRight, AlertTriangle, Calendar, Package, FileText, History, ArrowDown, ArrowUp, ShoppingCart, Filter, Download, Send, CheckCircle } from 'lucide-react';
+import { formatCurrency, suggestSubCategory } from '../utils';
+import { Search, Plus, X, ChevronRight, AlertTriangle, Calendar, Package, FileText, History, ArrowDown, ArrowUp, ShoppingCart, Filter, Download, Send, CheckCircle, Edit } from 'lucide-react';
 import { Product, Batch, StockLedgerEntry, PurchaseOrder } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -11,7 +11,7 @@ import autoTable from 'jspdf-autotable';
 export default function Inventory() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { products, batches, addProduct, addBatch, stockLedger, purchaseOrders, addPurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrder, suppliers, addSupplier, store } = useStore();
+  const { products, batches, addProduct, addBatch, stockLedger, purchaseOrders, addPurchaseOrder, updatePurchaseOrderStatus, updatePurchaseOrder, suppliers, addSupplier, store, updateProduct } = useStore();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [activeTab, setActiveTab] = useState<'inventory' | 'ledger' | 'po'>('inventory');
@@ -21,6 +21,7 @@ export default function Inventory() {
   
   // Modals
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [showAddBatch, setShowAddBatch] = useState(false);
   const [showLedger, setShowLedger] = useState<string | null>(null); // batchId
   const [showAddSupplier, setShowAddSupplier] = useState(false);
@@ -53,7 +54,7 @@ export default function Inventory() {
 
   // Combined Form State
   const [combinedForm, setCombinedForm] = useState({
-    code: '', name: '', category: '', unit: 'pcs', gstRate: '0', minStockAlert: '10',
+    code: '', name: '', category: '', subCategory: '', unit: 'pcs', gstRate: '0', minStockAlert: '10',
     batchNumber: '', manufacturingDate: '', expiryDate: '', stock: '', purchaseRate: '', mrp: ''
   });
 
@@ -151,6 +152,7 @@ export default function Inventory() {
       code: combinedForm.code,
       name: combinedForm.name,
       category: combinedForm.category,
+      subCategory: combinedForm.subCategory,
       unit: combinedForm.unit,
       gstRate: Number(combinedForm.gstRate),
       minStockAlert: Number(combinedForm.minStockAlert)
@@ -165,12 +167,12 @@ export default function Inventory() {
         purchaseRate: Number(combinedForm.purchaseRate),
         mrp: Number(combinedForm.mrp),
         stock: Number(combinedForm.stock)
-      });
+      }, newProduct);
     }
 
     setShowAddProduct(false);
     setCombinedForm({
-      code: '', name: '', category: '', unit: 'pcs', gstRate: '0', minStockAlert: '10',
+      code: '', name: '', category: '', subCategory: '', unit: 'pcs', gstRate: '0', minStockAlert: '10',
       batchNumber: '', manufacturingDate: '', expiryDate: '', stock: '', purchaseRate: '', mrp: ''
     });
   };
@@ -186,7 +188,7 @@ export default function Inventory() {
       purchaseRate: Number(batchForm.purchaseRate),
       mrp: Number(batchForm.mrp),
       stock: Number(batchForm.stock)
-    });
+    }, selectedProduct);
     setShowAddBatch(false);
     setBatchForm({ batchNumber: '', manufacturingDate: '', expiryDate: '', purchaseRate: '', mrp: '', stock: '' });
   };
@@ -319,29 +321,62 @@ export default function Inventory() {
       </div>
 
       {/* Tabs */}
-      <div className="flex bg-gray-100 p-1 rounded-xl">
+      <div className="flex bg-gray-100 p-1 rounded-xl" role="tablist" aria-label="Inventory Tabs">
         <button 
+          role="tab"
+          aria-selected={activeTab === 'inventory'}
+          aria-controls="tabpanel-inventory"
+          id="tab-inventory"
+          tabIndex={activeTab === 'inventory' ? 0 : -1}
           onClick={() => setActiveTab('inventory')}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-ledger')?.focus(); setActiveTab('ledger'); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-po')?.focus(); setActiveTab('po'); }
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
         >
           Stock
         </button>
         <button 
+          role="tab"
+          aria-selected={activeTab === 'ledger'}
+          aria-controls="tabpanel-ledger"
+          id="tab-ledger"
+          tabIndex={activeTab === 'ledger' ? 0 : -1}
           onClick={() => setActiveTab('ledger')}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'ledger' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-po')?.focus(); setActiveTab('po'); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-inventory')?.focus(); setActiveTab('inventory'); }
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'ledger' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
         >
           Ledger
         </button>
         <button 
+          role="tab"
+          aria-selected={activeTab === 'po'}
+          aria-controls="tabpanel-po"
+          id="tab-po"
+          tabIndex={activeTab === 'po' ? 0 : -1}
           onClick={() => setActiveTab('po')}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'po' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-inventory')?.focus(); setActiveTab('inventory'); }
+            if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-ledger')?.focus(); setActiveTab('ledger'); }
+          }}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'po' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
         >
           PO
         </button>
       </div>
 
       {/* Content Area */}
-      <div className="min-h-[400px]">
+      <div 
+        className="min-h-[400px] focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+        role="tabpanel"
+        id={`tabpanel-${activeTab}`}
+        aria-labelledby={`tab-${activeTab}`}
+        tabIndex={0}
+      >
           {activeTab === 'inventory' && (
               <div className="space-y-4">
                   {viewMode === 'batches' && selectedProduct && (
@@ -383,15 +418,20 @@ export default function Inventory() {
                               ))}
                           </div>
 
-                          <div className="space-y-3">
+                          <div id="items-list" className="space-y-3">
                               {filteredProducts.map(item => (
                                 <Card key={item.id} className="p-4">
                                   <div className="flex justify-between items-start mb-3">
                                     <div>
                                       <h3 className="font-bold text-gray-900 text-lg">{item.name}</h3>
-                                      <div className="flex gap-2 text-sm text-gray-500 mt-1">
+                                      <div className="flex flex-wrap gap-2 text-sm text-gray-500 mt-1">
                                         <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono">{item.code}</span>
                                         <span>{item.category}</span>
+                                        {item.subCategory && (
+                                          <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-xs font-bold border border-blue-100">
+                                            {item.subCategory}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="text-right">
@@ -430,13 +470,23 @@ export default function Inventory() {
                                       </div>
                                   )}
 
-                                  <Button 
-                                    variant="outline" 
-                                    className="w-full border-blue-200 text-blue-700 hover:bg-blue-50" 
-                                    onClick={() => { setSelectedProduct(item); setViewMode('batches'); }}
-                                  >
-                                    View Batches <ChevronRight size={16} className="ml-1" />
-                                  </Button>
+                                  <div className="flex gap-2">
+                                    <Button 
+                                      variant="outline" 
+                                      className="flex-1 border-blue-200 text-blue-700 hover:bg-blue-50" 
+                                      onClick={() => { setSelectedProduct(item); setViewMode('batches'); }}
+                                    >
+                                      View Batches <ChevronRight size={16} className="ml-1" />
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="px-3"
+                                      onClick={() => setEditingProduct(item)}
+                                    >
+                                      <Edit size={16} />
+                                    </Button>
+                                  </div>
                                 </Card>
                               ))}
                           </div>
@@ -545,8 +595,15 @@ export default function Inventory() {
                                     className={`min-w-[300px] snap-center p-4 cursor-pointer transition-colors group ${selectedSupplierHistory === supplier.id ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50' : 'hover:border-blue-300'}`}
                                   >
                                       <div 
-                                        className="flex justify-between items-start"
+                                        className="flex justify-between items-start focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
                                         onClick={() => setSelectedSupplierHistory(supplier.id === selectedSupplierHistory ? null : supplier.id)}
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            setSelectedSupplierHistory(supplier.id === selectedSupplierHistory ? null : supplier.id);
+                                          }
+                                        }}
                                       >
                                           <div>
                                               <h4 className="font-bold text-gray-900">{supplier.name}</h4>
@@ -562,10 +619,18 @@ export default function Inventory() {
                                           )}
                                       </div>
                                       <div 
-                                        className="mt-3 pt-3 border-t border-gray-100 text-center hover:bg-gray-50 -mx-4 -mb-4 pb-4 rounded-b-xl transition-colors"
+                                        className="mt-3 pt-3 border-t border-gray-100 text-center hover:bg-gray-50 -mx-4 -mb-4 pb-4 rounded-b-xl transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setShowCreatePO(supplier.id);
+                                        }}
+                                        tabIndex={0}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' || e.key === ' ') {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowCreatePO(supplier.id);
+                                          }
                                         }}
                                       >
                                           <span className="text-xs font-medium text-blue-600 flex items-center justify-center gap-1">
@@ -747,7 +812,29 @@ export default function Inventory() {
             <form onSubmit={handleCreateProductWithBatch} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Product Code *" value={combinedForm.code} onChange={e => setCombinedForm({...combinedForm, code: e.target.value})} required />
-                <Input label="Product Name *" value={combinedForm.name} onChange={e => setCombinedForm({...combinedForm, name: e.target.value})} required />
+                <Input 
+                  label="Product Name *" 
+                  value={combinedForm.name} 
+                  onChange={e => {
+                    const name = e.target.value;
+                    const suggested = suggestSubCategory(name);
+                    setCombinedForm({
+                      ...combinedForm, 
+                      name, 
+                      subCategory: suggested || combinedForm.subCategory 
+                    });
+                  }} 
+                  required 
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Category" value={combinedForm.category} onChange={e => setCombinedForm({...combinedForm, category: e.target.value})} />
+                <Input 
+                  label="Sub-Category (e.g. B.P., Diabetic)" 
+                  value={combinedForm.subCategory || ''} 
+                  onChange={e => setCombinedForm({...combinedForm, subCategory: e.target.value})} 
+                  placeholder="Suggested automatically"
+                />
               </div>
               <Input label="Batch Number *" value={combinedForm.batchNumber} onChange={e => setCombinedForm({...combinedForm, batchNumber: e.target.value})} required />
               <div className="grid grid-cols-2 gap-4">
@@ -763,6 +850,50 @@ export default function Inventory() {
                 <Input label="MRP *" type="number" value={combinedForm.mrp} onChange={e => setCombinedForm({...combinedForm, mrp: e.target.value})} required />
               </div>
               <Button type="submit" className="w-full">Add Product</Button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="font-bold text-xl text-gray-900">Edit Product</h3>
+              <button onClick={() => setEditingProduct(null)}><X size={20} /></button>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              updateProduct(editingProduct.id, {
+                name: editingProduct.name,
+                code: editingProduct.code,
+                category: editingProduct.category,
+                subCategory: editingProduct.subCategory,
+                unit: editingProduct.unit,
+                gstRate: editingProduct.gstRate,
+                minStockAlert: editingProduct.minStockAlert
+              });
+              setEditingProduct(null);
+            }} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Product Code *" value={editingProduct.code} onChange={e => setEditingProduct({...editingProduct, code: e.target.value})} required />
+                <Input label="Product Name *" value={editingProduct.name} onChange={e => setEditingProduct({...editingProduct, name: e.target.value})} required />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Category" value={editingProduct.category} onChange={e => setEditingProduct({...editingProduct, category: e.target.value})} />
+                <Input 
+                  label="Sub-Category" 
+                  value={editingProduct.subCategory || ''} 
+                  onChange={e => setEditingProduct({...editingProduct, subCategory: e.target.value})} 
+                  placeholder="e.g. B.P., Diabetic"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Unit" value={editingProduct.unit} onChange={e => setEditingProduct({...editingProduct, unit: e.target.value})} />
+                <Input label="GST Rate (%)" type="number" value={editingProduct.gstRate} onChange={e => setEditingProduct({...editingProduct, gstRate: Number(e.target.value)})} />
+              </div>
+              <Input label="Min Stock Alert" type="number" value={editingProduct.minStockAlert} onChange={e => setEditingProduct({...editingProduct, minStockAlert: Number(e.target.value)})} />
+              <Button type="submit" className="w-full">Update Product</Button>
             </form>
           </div>
         </div>

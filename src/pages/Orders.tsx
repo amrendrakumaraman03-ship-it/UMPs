@@ -43,12 +43,31 @@ export default function Orders() {
       <h2 className="text-xl font-bold text-gray-900">Orders</h2>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {['All', 'Pending', 'Active', 'Completed'].map((f) => (
+      <div className="flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Order Filters">
+        {['All', 'Pending', 'Active', 'Completed'].map((f, index, array) => (
           <button
             key={f}
+            role="tab"
+            aria-selected={filter === f}
+            aria-controls={`tabpanel-${f}`}
+            id={`tab-${f}`}
+            tabIndex={filter === f ? 0 : -1}
             onClick={() => setFilter(f as any)}
-            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors ${
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                const nextTab = array[(index + 1) % array.length];
+                document.getElementById(`tab-${nextTab}`)?.focus();
+                setFilter(nextTab as any);
+              }
+              if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                const prevTab = array[(index - 1 + array.length) % array.length];
+                document.getElementById(`tab-${prevTab}`)?.focus();
+                setFilter(prevTab as any);
+              }
+            }}
+            className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 ${
               filter === f 
                 ? 'bg-blue-600 text-white' 
                 : 'bg-white text-gray-600 border border-gray-200'
@@ -60,7 +79,13 @@ export default function Orders() {
       </div>
 
       {/* Orders List */}
-      <div className="space-y-3">
+      <div 
+        className="space-y-3 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+        role="tabpanel"
+        id={`tabpanel-${filter}`}
+        aria-labelledby={`tab-${filter}`}
+        tabIndex={0}
+      >
         {filteredOrders.length === 0 ? (
           <div className="text-center py-10 text-gray-500">
             <Package className="mx-auto mb-2 opacity-20" size={48} />

@@ -15,6 +15,7 @@ import InvoiceUpload from './pages/InvoiceUpload';
 import OnlineStore from './pages/OnlineStore';
 import Khata from './pages/Khata';
 import DailyLedger from './pages/DailyLedger';
+import StorefrontDesigner from './pages/StorefrontDesigner';
 
 export default function App() {
   return (
@@ -34,6 +35,7 @@ export default function App() {
             <Route path="expiry-discount" element={<ExpiryDiscount />} />
             <Route path="invoice-upload" element={<InvoiceUpload />} />
             <Route path="online-store" element={<OnlineStore />} />
+            <Route path="storefront-designer" element={<StorefrontDesigner />} />
             <Route path="khata" element={<Khata />} />
             <Route path="daily-ledger" element={<DailyLedger />} />
           </Route>

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import { Card, Button, Input } from '../components/ui';
 import { formatCurrency } from '../utils';
-import { Plus, ShoppingBag, AlertTriangle, TrendingUp, ArrowRight, Tag, Clock, Wallet, Globe, BarChart, Package, FilePlus, Search, X, FileText, RotateCcw, ScanLine, Cloud, CloudOff, RefreshCw } from 'lucide-react';
+import { Plus, ShoppingBag, AlertTriangle, TrendingUp, ArrowRight, Tag, Clock, Wallet, Globe, BarChart, Package, FilePlus, Search, X, FileText, RotateCcw, ScanLine, Cloud, CloudOff, RefreshCw, Download } from 'lucide-react';
 import { Product, Order } from '../types';
 
 export default function Dashboard() {
@@ -96,6 +96,14 @@ export default function Dashboard() {
               {syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Offline'}
             </span>
           </div>
+          <div className="hidden lg:flex gap-2 ml-4">
+            <Button variant="outline" size="sm" onClick={() => window.print()}>
+              <FileText size={16} className="mr-2" /> Print Report
+            </Button>
+            <Button variant="outline" size="sm">
+              <Download size={16} className="mr-2" /> Export CSV
+            </Button>
+          </div>
         </div>
         <div className="text-sm text-gray-500">
           {today.toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
@@ -104,7 +112,14 @@ export default function Dashboard() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <Card className="p-4 bg-blue-50 border-blue-100 cursor-pointer" onClick={() => navigate(`/reports?from=${todayStr}&to=${todayStr}`)}>
+        <Card 
+          className="p-4 bg-blue-50 border-blue-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500" 
+          onClick={() => navigate(`/reports?from=${todayStr}&to=${todayStr}`)}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/reports?from=${todayStr}&to=${todayStr}`); } }}
+          role="button"
+          aria-label="View Today Sales Report"
+        >
           <div className="flex items-center gap-2 text-blue-700 mb-1">
             <TrendingUp size={16} />
             <span className="text-xs font-semibold uppercase">Today Sales</span>
@@ -116,7 +131,14 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card className="p-4 bg-orange-50 border-orange-100 cursor-pointer" onClick={() => navigate('/inventory?filter=low_stock')}>
+        <Card 
+          className="p-4 bg-orange-50 border-orange-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500" 
+          onClick={() => navigate('/inventory?filter=low_stock')}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/inventory?filter=low_stock'); } }}
+          role="button"
+          aria-label="View Low Stock Items"
+        >
           <div className="flex items-center gap-2 text-orange-700 mb-1">
             <AlertTriangle size={16} />
             <span className="text-xs font-semibold uppercase">Low Stock</span>
@@ -128,7 +150,14 @@ export default function Dashboard() {
 
       {/* Expiry / Clearance Action Widget */}
       {(criticalCount > 0 || nearCount > 0) && (
-        <Card className="p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 cursor-pointer" onClick={() => navigate('/expiry-discount')}>
+        <Card 
+          className="p-4 bg-gradient-to-r from-red-50 to-orange-50 border border-red-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-red-500" 
+          onClick={() => navigate('/expiry-discount')}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/expiry-discount'); } }}
+          role="button"
+          aria-label="View Clearance Action Items"
+        >
           <div className="flex justify-between items-center">
             <div>
               <div className="flex items-center gap-2 text-red-700 mb-1">
@@ -182,7 +211,7 @@ export default function Dashboard() {
       {/* Secondary Actions Grid */}
       <div>
         <h2 className="font-semibold text-gray-900 mb-3">Quick Access</h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 lg:grid-cols-4 gap-3 lg:gap-4">
           {[
             { label: 'Khata', path: '/khata', color: 'bg-blue-50 text-blue-700', icon: <Wallet size={20} /> },
             { label: 'Daily Ledger', path: '/daily-ledger', color: 'bg-green-50 text-green-700', icon: <Clock size={20} /> },
@@ -196,17 +225,23 @@ export default function Dashboard() {
             <button
               key={item.label}
               onClick={() => navigate(item.path)}
-              className={`p-4 rounded-xl flex flex-col items-center justify-center gap-2 ${item.color} transition-transform active:scale-95`}
+              className={`p-4 lg:p-6 rounded-xl lg:rounded-2xl flex flex-col items-center justify-center gap-2 ${item.color} transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-${item.color.split('-')[1]}-500`}
+              aria-label={`Navigate to ${item.label}`}
             >
-              {item.icon}
+              <div className="p-2 bg-white/50 rounded-lg">
+                {item.icon}
+              </div>
               <span className="font-medium text-sm text-center leading-tight">{item.label}</span>
             </button>
           ))}
           <button
               onClick={() => setShowQuickPO(true)}
-              className="p-4 rounded-xl flex flex-col items-center justify-center gap-2 bg-indigo-50 text-indigo-700 transition-transform active:scale-95"
+              className="p-4 lg:p-6 rounded-xl lg:rounded-2xl flex flex-col items-center justify-center gap-2 bg-indigo-50 text-indigo-700 transition-all hover:scale-[1.02] hover:shadow-md active:scale-95 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              aria-label="Create Quick Purchase Order"
             >
-              <FilePlus size={20} />
+              <div className="p-2 bg-white/50 rounded-lg">
+                <FilePlus size={20} />
+              </div>
               <span className="font-medium text-sm text-center leading-tight">Quick PO</span>
           </button>
         </div>
@@ -227,15 +262,25 @@ export default function Dashboard() {
             <p className="text-sm">No orders yet</p>
           </Card>
         ) : (
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             {orders.slice(0, 3).map(order => (
               <Card 
                 key={order.id} 
-                className="p-3 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-colors"
+                className="p-4 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 onClick={() => {
                     setSelectedOrder(order);
                     setIsConfirmingReturn(false);
                 }}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedOrder(order);
+                    setIsConfirmingReturn(false);
+                  }
+                }}
+                role="button"
+                aria-label={`View details for order ${order.id.slice(-4)}`}
               >
                 <div>
                   <div className="flex items-center gap-2">

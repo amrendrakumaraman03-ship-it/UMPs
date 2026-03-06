@@ -1,1 +1,42 @@
 @import "tailwindcss";
+
+@media (min-width: 1024px) {
+  /* Desktop Grid for Items and Pharmacy (Online Store) lists */
+  #items-list, 
+  #online-items-list, 
+  #online-live-list,
+  #online-orders-list,
+  #business-type-list {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 24px !important;
+  }
+
+  /* Reset Tailwind space-y-3 margins in grid mode */
+  #items-list > *, 
+  #online-items-list > *, 
+  #online-live-list > *,
+  #online-orders-list > *,
+  #business-type-list > * {
+    margin-top: 0 !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Ensure cards maintain a consistent, professional height */
+  #items-list .card,
+  #online-items-list .card,
+  #online-live-list .card,
+  #online-orders-list .card,
+  #business-type-list button {
+    flex: 1;
+    min-height: 180px;
+  }
+
+  /* Center Content on wide screens */
+  main .max-w-7xl {
+    max-width: 1280px !important;
+    margin: 0 auto !important;
+  }
+}

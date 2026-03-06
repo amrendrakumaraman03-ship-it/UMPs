@@ -74,7 +74,7 @@ export default function OnlineStore() {
       content = onlineOrders.length === 0 ? (
           <EmptyState message="No online orders yet." />
       ) : (
-          <div className="space-y-3">
+          <div id="online-orders-list" className="space-y-3">
               {onlineOrders
                   .sort((a, b) => {
                       if (a.status === 'Urgent' && b.status !== 'Urgent') return -1;
@@ -94,7 +94,7 @@ export default function OnlineStore() {
       content = draftBatches.length === 0 ? (
           <EmptyState message="No offline stock available to list." />
       ) : (
-          <div className="space-y-3">
+          <div id="online-items-list" className="space-y-3">
               <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-gray-200 shadow-sm sticky top-0 z-10">
                   <div className="flex items-center gap-3">
                       <input 
@@ -137,15 +137,17 @@ export default function OnlineStore() {
       content = liveBatches.length === 0 ? (
           <EmptyState message="No products are currently live." />
       ) : (
-          liveBatches.map(batch => (
-              <OnlineBatchCard 
-                  key={batch.id} 
-                  batch={batch} 
-                  productName={products.find(p => p.id === batch.productId)?.name || 'Unknown'}
-                  onUpdate={updateBatchOnlineStatus}
-                  mode="live"
-              />
-          ))
+          <div id="online-live-list" className="space-y-3">
+              {liveBatches.map(batch => (
+                  <OnlineBatchCard 
+                      key={batch.id} 
+                      batch={batch} 
+                      productName={products.find(p => p.id === batch.productId)?.name || 'Unknown'}
+                      onUpdate={updateBatchOnlineStatus}
+                      mode="live"
+                  />
+              ))}
+          </div>
       );
   }
 
@@ -276,28 +278,61 @@ export default function OnlineStore() {
 
       {/* Tabs & Content */}
       <div className="space-y-4">
-          <div className="flex p-1 bg-gray-100 rounded-xl">
+          <div className="flex p-1 bg-gray-100 rounded-xl" role="tablist" aria-label="Online Store Tabs">
             <button
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'orders' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
+              role="tab"
+              aria-selected={activeTab === 'orders'}
+              aria-controls="tabpanel-orders"
+              id="tab-orders"
+              tabIndex={activeTab === 'orders' ? 0 : -1}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'orders' ? 'bg-white shadow-sm text-blue-700' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('orders')}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-draft')?.focus(); setActiveTab('draft'); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-live')?.focus(); setActiveTab('live'); }
+              }}
             >
               Orders <Badge variant="default" className="ml-2 bg-blue-100 text-blue-700">{onlineOrders.filter(o => o.status === 'Pending' || o.status === 'Urgent').length}</Badge>
             </button>
             <button
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'draft' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
+              role="tab"
+              aria-selected={activeTab === 'draft'}
+              aria-controls="tabpanel-draft"
+              id="tab-draft"
+              tabIndex={activeTab === 'draft' ? 0 : -1}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'draft' ? 'bg-white shadow-sm text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('draft')}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-live')?.focus(); setActiveTab('live'); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-orders')?.focus(); setActiveTab('orders'); }
+              }}
             >
               Drafts <Badge variant="default" className="ml-2">{draftBatches.length}</Badge>
             </button>
             <button
-              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'live' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
+              role="tab"
+              aria-selected={activeTab === 'live'}
+              aria-controls="tabpanel-live"
+              id="tab-live"
+              tabIndex={activeTab === 'live' ? 0 : -1}
+              className={`flex-1 py-2.5 text-sm font-medium rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 ${activeTab === 'live' ? 'bg-white shadow-sm text-green-700' : 'text-gray-500 hover:text-gray-700'}`}
               onClick={() => setActiveTab('live')}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowRight') { e.preventDefault(); document.getElementById('tab-orders')?.focus(); setActiveTab('orders'); }
+                if (e.key === 'ArrowLeft') { e.preventDefault(); document.getElementById('tab-draft')?.focus(); setActiveTab('draft'); }
+              }}
             >
               Live <Badge variant="success" className="ml-2">{liveBatches.length}</Badge>
             </button>
           </div>
 
-          <div className="min-h-[300px]">
+          <div 
+            className="min-h-[300px] focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg"
+            role="tabpanel"
+            id={`tabpanel-${activeTab}`}
+            aria-labelledby={`tab-${activeTab}`}
+            tabIndex={0}
+          >
             {content}
           </div>
       </div>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { StoreProfile, Product, Batch, Order, Customer, Expense, LedgerEntry, StockLedgerEntry, PurchaseOrder, Supplier, DailyLedgerRecord } from '../types';
+import { StoreProfile, Product, Batch, Order, Customer, Expense, LedgerEntry, StockLedgerEntry, PurchaseOrder, Supplier, DailyLedgerRecord, VendorPost } from '../types';
 import { generateId } from '../utils';
 import { supabase } from '../lib/supabase';
 
@@ -9,8 +9,8 @@ interface StoreContextType {
   
   products: Product[];
   batches: Batch[];
-  addProduct: (product: Omit<Product, 'id'>) => void;
-  addBatch: (batch: Omit<Batch, 'id'>) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Product;
+  addBatch: (batch: Omit<Batch, 'id'>, product?: Product) => void;
   updateBatchStock: (batchId: string, quantity: number) => void;
   updateBatchDiscount: (batchId: string, discount: Batch['discount']) => void;
   updateBatchOnlineStatus: (batchId: string, status: 'OFFLINE' | 'DRAFT' | 'LIVE', onlineStock?: number) => void;
@@ -39,6 +39,11 @@ interface StoreContextType {
   
   dailyLedgers: DailyLedgerRecord[];
   saveDailyLedger: (ledger: Omit<DailyLedgerRecord, 'id'>) => void;
+  
+  vendorPosts: VendorPost[];
+  addVendorPost: (post: Omit<VendorPost, 'id' | 'createdAt' | 'storeId'>) => void;
+  updateStoreProfile: (updates: Partial<StoreProfile>) => void;
+  updateProduct: (id: string, updates: Partial<Product>) => void;
   
   resetStore: () => void;
   syncStatus: 'synced' | 'syncing' | 'error';
@@ -134,6 +139,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch { return []; }
   });
 
+  const [vendorPosts, setVendorPosts] = useState<VendorPost[]>(() => {
+    try {
+      const saved = localStorage.getItem('umps_vendor_posts');
+      const parsed = saved ? JSON.parse(saved) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch { return []; }
+  });
+
   const [isInitialized, setIsInitialized] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'error'>('synced');
 
@@ -163,6 +176,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                     customerName: sale.customer_name || 'Walk-in',
                     items: [],
                     total: 0,
+                    subtotal: 0,
+                    tax: 0,
                     status: sale.status || 'Completed',
                     paymentMode: sale.payment_mode || 'Cash',
                     type: sale.order_type || 'Offline',
@@ -206,10 +221,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           if (state.purchaseOrders) setPurchaseOrders(state.purchaseOrders);
           if (state.suppliers) setSuppliers(state.suppliers);
           if (state.dailyLedgers) setDailyLedgers(state.dailyLedgers);
+          if (state.vendorPosts) setVendorPosts(state.vendorPosts);
         } else if (store) {
           // No data in Supabase, but we have local data. Push to Supabase.
           const appState = {
-            store, products, batches, orders, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers
+            store, products, batches, orders, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers, vendorPosts
           };
           await supabase.from('app_state').upsert({ id: 'main_store', data: appState, updated_at: new Date().toISOString() });
         }
@@ -238,21 +254,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('umps_purchase_orders', JSON.stringify(purchaseOrders));
     localStorage.setItem('umps_suppliers', JSON.stringify(suppliers));
     localStorage.setItem('umps_daily_ledgers', JSON.stringify(dailyLedgers));
+    localStorage.setItem('umps_vendor_posts', JSON.stringify(vendorPosts));
 
     // Sync to Supabase
     if (store) {
       setSyncStatus('syncing');
       const appState = {
-        store, products, batches, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers
+        store, products, batches, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers, vendorPosts
       };
       supabase.from('app_state').upsert({ id: 'main_store', data: appState, updated_at: new Date().toISOString() })
         .then(({ error }) => {
           if (error) setSyncStatus('error');
           else setSyncStatus('synced');
-        })
-        .catch(() => setSyncStatus('error'));
+        });
     }
-  }, [isInitialized, store, products, batches, orders, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers]);
+  }, [isInitialized, store, products, batches, orders, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers, vendorPosts]);
 
   // Actions
   const setStore = (data: StoreProfile) => setStoreState(data);
@@ -263,7 +279,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newProduct;
   };
 
-  const addBatch = (batchData: Omit<Batch, 'id'>) => {
+  const addBatch = (batchData: Omit<Batch, 'id'>, product?: Product) => {
     const newBatch = { ...batchData, id: generateId() };
     setBatches(prev => [...prev, newBatch]);
     
@@ -281,11 +297,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setStockLedger(prev => [ledgerEntry, ...prev]);
 
     // Write directly to Supabase inventory table
-    const product = products.find(p => p.id === batchData.productId);
-    if (product) {
+    const foundProduct = product || products.find(p => p.id === batchData.productId);
+    if (foundProduct) {
       supabase.from('inventory').insert({
         id: newBatch.id,
-        product_name: product.name,
+        product_name: foundProduct.name,
+        sub_category: foundProduct.subCategory,
         batch_number: newBatch.batchNumber,
         expiry_date: newBatch.expiryDate,
         mrp: newBatch.mrp,
@@ -316,6 +333,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             referenceId: b.id
           };
           setStockLedger(prev => [ledgerEntry, ...prev]);
+
+          // Update Supabase inventory table
+          supabase.from('inventory').update({ qty_offline: quantity }).eq('id', b.id).then(({ error }) => {
+            if (error) console.error("Error updating inventory table:", error);
+          });
       }
       
       return { ...b, stock: quantity };
@@ -339,6 +361,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         alert('Cannot make expired batch LIVE');
         return b;
       }
+
+      // Update Supabase inventory table
+      supabase.from('inventory').update({ qty_online: finalOnlineStock }).eq('id', b.id).then(({ error }) => {
+        if (error) console.error("Error updating inventory table:", error);
+      });
 
       return { ...b, onlineStatus: status, onlineStock: finalOnlineStock };
     }));
@@ -451,6 +478,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }));
       }
 
+      // Update Supabase sales table
+      supabase.from('sales').update({ status }).eq('order_id', id).then(({ error }) => {
+        if (error) console.error("Error updating order status in sales table:", error);
+      });
+
       return { ...o, status };
     }));
   };
@@ -465,9 +497,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setCustomers(prev => prev.map(c => {
           if (c.id === entryData.customerId) {
               const balanceChange = entryData.type === 'DEBIT' ? entryData.amount : -entryData.amount;
+              const newBalance = c.balance + balanceChange;
+              
+              // Update Supabase customer balance
+              supabase.from('customers').update({ balance: newBalance }).eq('id', c.id).then(({ error }) => {
+                if (error) console.error("Error updating customer balance from ledger:", error);
+              });
+
               return {
                   ...c,
-                  balance: c.balance + balanceChange,
+                  balance: newBalance,
                   ledger: [newEntry, ...(c.ledger || [])]
               };
           }
@@ -491,6 +530,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const item = order.items.find(i => i.batchId === b.id);
         if (item) {
             console.log(`Reverting stock for batch ${b.id}: ${b.stock} + ${item.quantity}`);
+            
+            // Revert Supabase inventory bucket
+            const qtyColumn = order.type === 'Online' ? 'qty_online' : 'qty_offline';
+            supabase.from('inventory').select(qtyColumn).eq('batch_number', item.batchNumber).single()
+              .then(({ data }) => {
+                if (data) {
+                  const newQty = data[qtyColumn] + item.quantity;
+                  supabase.from('inventory').update({ [qtyColumn]: newQty }).eq('batch_number', item.batchNumber).then(({ error }) => {
+                    if (error) console.error("Error reverting inventory bucket:", error);
+                  });
+                }
+              });
+
             return { ...b, stock: b.stock + item.quantity };
         }
         return b;
@@ -529,6 +581,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     }
 
+    // Delete from Supabase sales table
+    supabase.from('sales').delete().eq('order_id', order.id).then(({ error }) => {
+        if (error) console.error("Error deleting from sales table:", error);
+    });
+
     setOrders(prev => {
         console.log('Removing order from state');
         return prev.filter(o => o.id !== id);
@@ -559,7 +616,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateCustomerBalance = (id: string, amount: number) => {
-    setCustomers(prev => prev.map(c => c.id === id ? { ...c, balance: c.balance + amount } : c));
+    setCustomers(prev => prev.map(c => {
+      if (c.id === id) {
+        const newBalance = c.balance + amount;
+        supabase.from('customers').update({ balance: newBalance }).eq('id', id).then(({ error }) => {
+          if (error) console.error("Error updating customer balance:", error);
+        });
+        return { ...c, balance: newBalance };
+      }
+      return c;
+    }));
   };
 
   const addExpense = (expenseData: Omit<Expense, 'id'>) => {
@@ -603,6 +669,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
+  const updateStoreProfile = (updates: Partial<StoreProfile>) => {
+    if (!store) return;
+    const updatedStore = { ...store, ...updates };
+    setStoreState(updatedStore);
+    localStorage.setItem('umps_store', JSON.stringify(updatedStore));
+  };
+
+  const addVendorPost = (postData: Omit<VendorPost, 'id' | 'createdAt' | 'storeId'>) => {
+    if (!store) return;
+    const newPost: VendorPost = {
+      ...postData,
+      id: generateId(),
+      storeId: store.id,
+      createdAt: new Date().toISOString()
+    };
+    setVendorPosts(prev => [newPost, ...prev]);
+    localStorage.setItem('umps_vendor_posts', JSON.stringify([newPost, ...vendorPosts]));
+    
+    // Also save to a dedicated table if it exists
+    supabase.from('vendor_posts').insert({
+      id: newPost.id,
+      store_id: newPost.storeId,
+      content: newPost.content,
+      image_url: newPost.imageUrl,
+      created_at: newPost.createdAt
+    }).then(({ error }) => {
+      if (error) console.error("Error saving to vendor_posts table:", error);
+    });
+  };
+
+  const updateProduct = (id: string, updates: Partial<Product>) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
+    
+    // If name or subCategory changes, update inventory table
+    if (updates.name || updates.subCategory) {
+      const updateData: any = {};
+      if (updates.name) updateData.product_name = updates.name;
+      if (updates.subCategory) updateData.sub_category = updates.subCategory;
+      
+      const productBatches = batches.filter(b => b.productId === id);
+      const batchIds = productBatches.map(b => b.id);
+      
+      if (batchIds.length > 0) {
+        supabase.from('inventory').update(updateData).in('id', batchIds).then(({ error }) => {
+          if (error) console.error("Error updating inventory table for product:", error);
+        });
+      }
+    }
+  };
+
   const resetStore = () => {
       localStorage.clear();
       setStoreState(null);
@@ -626,6 +742,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       customers, addCustomer, updateCustomerBalance, addLedgerEntry,
       expenses, addExpense,
       dailyLedgers, saveDailyLedger,
+      vendorPosts, addVendorPost, updateStoreProfile,
+      updateProduct,
       resetStore,
       syncStatus
     }}>

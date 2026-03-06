@@ -68,7 +68,7 @@ export default function Onboarding() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Business Type</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div id="business-type-list" className="grid grid-cols-3 gap-2">
                 {businessTypes.map((b) => (
                   <button
                     key={b.type}
