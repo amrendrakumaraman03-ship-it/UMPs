@@ -16,6 +16,7 @@ import OnlineStore from './pages/OnlineStore';
 import Khata from './pages/Khata';
 import DailyLedger from './pages/DailyLedger';
 import StorefrontDesigner from './pages/StorefrontDesigner';
+import ConsumerApp from './pages/ConsumerApp';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/consumer" element={<ConsumerApp />} />
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="pos" element={<POS />} />

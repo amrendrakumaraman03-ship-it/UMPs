@@ -17,6 +17,10 @@ export interface StoreProfile {
   bio?: string;
   facilities?: string[];
   primaryColor?: string;
+  location?: {
+    lat: number;
+    lng: number;
+  };
 }
 
 export interface VendorPost {

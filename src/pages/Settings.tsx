@@ -53,6 +53,12 @@ export default function Settings() {
         <h3 className="font-semibold text-gray-900 border-b pb-2">Store Profile</h3>
         <div className="grid grid-cols-1 gap-4">
           <Input 
+            label="Vendor ID (Store ID)" 
+            value={store.id} 
+            readOnly
+            className="bg-gray-50 text-gray-500"
+          />
+          <Input 
             label="Store Name" 
             value={store.name} 
             onChange={e => setStore({ ...store, name: e.target.value })} 

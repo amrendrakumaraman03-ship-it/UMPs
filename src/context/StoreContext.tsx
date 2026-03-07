@@ -152,6 +152,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Initial Sync from Supabase
   useEffect(() => {
+    // ... existing init code ...
     const initSupabase = async () => {
       try {
         const { data, error } = await supabase.from('app_state').select('data').eq('id', 'main_store').single();
@@ -236,7 +237,78 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     };
     initSupabase();
+
+    // Setup Offline Sync Listener
+    const handleOnline = () => {
+        console.log("Back online! Syncing offline queue...");
+        const queueStr = localStorage.getItem('umps_offline_stock_queue');
+        if (queueStr) {
+            try {
+                const queue: { batchNumber: string, updates: any }[] = JSON.parse(queueStr);
+                queue.forEach(async (item) => {
+                    await supabase.from('inventory').update(item.updates).eq('batch_number', item.batchNumber);
+                });
+                localStorage.removeItem('umps_offline_stock_queue');
+            } catch (e) {
+                console.error("Failed to sync offline queue", e);
+            }
+        }
+    };
+    window.addEventListener('online', handleOnline);
+
+    // Setup Supabase Realtime Listener for New Orders
+    const salesSubscription = supabase
+      .channel('public:sales')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sales' }, (payload) => {
+        const newSale = payload.new;
+        if (newSale.order_type === 'Online') {
+          // Play a ding sound
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+          audio.play().catch(e => console.error("Audio play failed:", e));
+          
+          // Show a simple alert (or could use a toast library if available)
+          alert(`New Online Order Received from ${newSale.customer_name || 'Customer'}!`);
+          
+          // Note: In a real app, we would fetch the full order details here and add it to the state.
+          // For now, we rely on the user refreshing or we could trigger a re-fetch of orders.
+        }
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      supabase.removeChannel(salesSubscription);
+    };
   }, []);
+
+  const queueOfflineStockUpdate = async (batchNumber: string, updates: any) => {
+      if (navigator.onLine) {
+          try {
+              const { error } = await supabase.from('inventory').update(updates).eq('batch_number', batchNumber);
+              if (error) throw error;
+          } catch (error) {
+              console.error("Error updating inventory bucket, queuing offline:", error);
+              addToOfflineQueue(batchNumber, updates);
+          }
+      } else {
+          addToOfflineQueue(batchNumber, updates);
+      }
+  };
+
+  const addToOfflineQueue = (batchNumber: string, updates: any) => {
+      const queueStr = localStorage.getItem('umps_offline_stock_queue');
+      const queue: { batchNumber: string, updates: any }[] = queueStr ? JSON.parse(queueStr) : [];
+      
+      // Merge updates for the same batch
+      const existingIndex = queue.findIndex(q => q.batchNumber === batchNumber);
+      if (existingIndex >= 0) {
+          queue[existingIndex].updates = { ...queue[existingIndex].updates, ...updates };
+      } else {
+          queue.push({ batchNumber, updates });
+      }
+      
+      localStorage.setItem('umps_offline_stock_queue', JSON.stringify(queue));
+  };
 
   // Persistence
   useEffect(() => {
@@ -269,6 +341,106 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     }
   }, [isInitialized, store, products, batches, orders, customers, expenses, stockLedger, purchaseOrders, suppliers, dailyLedgers, vendorPosts]);
+
+  // Realtime Order Listener
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const notifiedOrders = new Set<string>();
+
+    const channel = supabase
+      .channel('public:sales')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sales' },
+        (payload) => {
+          const newSale = payload.new;
+          if (newSale.order_type === 'Online') {
+            const orderId = newSale.order_id || newSale.id;
+            
+            if (!notifiedOrders.has(orderId)) {
+                notifiedOrders.add(orderId);
+                // Play sound
+                try {
+                    const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // A5
+                    gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                    oscillator.start();
+                    oscillator.stop(audioCtx.currentTime + 0.5);
+                } catch(e) {
+                    console.error("Audio play failed", e);
+                }
+                
+                alert(`New Online Order Received from ${newSale.customer_name || 'Customer'}!`);
+            }
+            
+            // Add to state
+            setOrders(prev => {
+                const existingOrderIndex = prev.findIndex(o => o.id === orderId);
+                if (existingOrderIndex >= 0) {
+                    const existingOrder = prev[existingOrderIndex];
+                    // Check if item already exists
+                    if (existingOrder.items.some(i => i.batchId === newSale.item_id)) {
+                        return prev;
+                    }
+                    const updatedOrder = { ...existingOrder };
+                    updatedOrder.items = [...updatedOrder.items, {
+                        productId: '',
+                        batchId: newSale.item_id,
+                        name: newSale.product_name || 'Item',
+                        quantity: newSale.quantity || 1,
+                        mrp: (newSale.total_amount || 0) / (newSale.quantity || 1),
+                        finalPrice: (newSale.total_amount || 0) / (newSale.quantity || 1),
+                        gstRate: 0,
+                        batchNumber: '',
+                        expiryDate: ''
+                    }];
+                    updatedOrder.total += (newSale.total_amount || 0);
+                    
+                    const newOrders = [...prev];
+                    newOrders[existingOrderIndex] = updatedOrder;
+                    return newOrders;
+                } else {
+                    const newOrder: Order = {
+                        id: orderId,
+                        customerId: '',
+                        customerName: newSale.customer_name || 'Walk-in',
+                        items: [{
+                            productId: '',
+                            batchId: newSale.item_id,
+                            name: newSale.product_name || 'Item',
+                            quantity: newSale.quantity || 1,
+                            mrp: (newSale.total_amount || 0) / (newSale.quantity || 1),
+                            finalPrice: (newSale.total_amount || 0) / (newSale.quantity || 1),
+                            gstRate: 0,
+                            batchNumber: '',
+                            expiryDate: ''
+                        }],
+                        total: newSale.total_amount || 0,
+                        subtotal: 0,
+                        tax: 0,
+                        status: newSale.status || 'Pending',
+                        paymentMode: newSale.payment_mode || 'Cash',
+                        type: newSale.order_type || 'Online',
+                        date: newSale.date || new Date().toISOString()
+                    };
+                    return [newOrder, ...prev];
+                }
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isInitialized]);
 
   // Actions
   const setStore = (data: StoreProfile) => setStoreState(data);
@@ -335,12 +507,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setStockLedger(prev => [ledgerEntry, ...prev]);
 
           // Update Supabase inventory table
-          supabase.from('inventory').update({ qty_offline: quantity }).eq('id', b.id).then(({ error }) => {
-            if (error) console.error("Error updating inventory table:", error);
-          });
+          const updates: any = { qty_offline: quantity };
+          let newOnlineStock = b.onlineStock;
+          if ((b.onlineStock || 0) > quantity) {
+              updates.qty_online = quantity;
+              newOnlineStock = quantity;
+          }
+          queueOfflineStockUpdate(b.batchNumber, updates);
+          
+          return { ...b, stock: quantity, onlineStock: newOnlineStock };
       }
       
-      return { ...b, stock: quantity };
+      return b;
     }));
   };
 
@@ -363,9 +541,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       // Update Supabase inventory table
-      supabase.from('inventory').update({ qty_online: finalOnlineStock }).eq('id', b.id).then(({ error }) => {
-        if (error) console.error("Error updating inventory table:", error);
-      });
+      queueOfflineStockUpdate(b.batchNumber, { qty_online: finalOnlineStock });
 
       return { ...b, onlineStatus: status, onlineStock: finalOnlineStock };
     }));
@@ -387,6 +563,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (batchIndex >= 0) {
         newBatches[batchIndex].stock -= item.quantity;
         
+        // Real-time Stock Sync: If total_stock falls below online_stock_limit, reduce online stock
+        let onlineStockUpdated = false;
+        if ((newBatches[batchIndex].onlineStock || 0) > newBatches[batchIndex].stock) {
+            newBatches[batchIndex].onlineStock = newBatches[batchIndex].stock;
+            onlineStockUpdated = true;
+        }
+
         // Record Stock Ledger Entry
         ledgerEntries.push({
           id: generateId(),
@@ -403,13 +586,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const qtyColumn = orderData.type === 'Online' ? 'qty_online' : 'qty_offline';
         
         // Fetch current value and decrement
-        supabase.from('inventory').select(qtyColumn).eq('batch_number', item.batchNumber).single()
+        supabase.from('inventory').select('qty_offline, qty_online').eq('batch_number', item.batchNumber).single()
           .then(({ data }) => {
             if (data) {
-              const newQty = Math.max(0, data[qtyColumn] - item.quantity);
-              supabase.from('inventory').update({ [qtyColumn]: newQty }).eq('batch_number', item.batchNumber).then(({ error }) => {
-                if (error) console.error("Error updating inventory bucket:", error);
-              });
+              const updates: any = {};
+              if (orderData.type === 'Online') {
+                 updates.qty_online = Math.max(0, data.qty_online - item.quantity);
+              } else {
+                 updates.qty_offline = Math.max(0, data.qty_offline - item.quantity);
+                 // If offline sale causes physical stock to drop below online allocated stock
+                 if ((data.qty_online || 0) > updates.qty_offline) {
+                     updates.qty_online = updates.qty_offline;
+                 }
+              }
+              queueOfflineStockUpdate(item.batchNumber, updates);
             }
           });
       }
@@ -456,23 +646,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(prev => prev.map(o => {
       if (o.id !== id) return o;
       
-      // If status changes to 'Accepted' or 'Urgent' for an online order, increment bookedStock
+      // If status changes to 'Accepted' or 'Urgent' for an online order, deduct stock
       if (o.type === 'Online' && (status === 'Accepted' || status === 'Urgent') && (o.status === 'Pending')) {
         setBatches(prevBatches => prevBatches.map(b => {
           const item = o.items.find(i => i.batchId === b.id);
           if (item) {
-            return { ...b, bookedStock: (b.bookedStock || 0) + item.quantity };
-          }
-          return b;
-        }));
-      }
+            const newStock = Math.max(0, b.stock - item.quantity);
+            const newOnlineStock = Math.max(0, (b.onlineStock || 0) - item.quantity);
+            
+            // Update Supabase inventory table
+            queueOfflineStockUpdate(b.batchNumber, { 
+                qty_offline: newStock,
+                qty_online: newOnlineStock
+            });
 
-      // If status changes to 'Completed' or 'Cancelled', decrement bookedStock
-      if (o.type === 'Online' && (status === 'Completed' || status === 'Cancelled') && (o.status === 'Accepted' || o.status === 'Urgent')) {
-        setBatches(prevBatches => prevBatches.map(b => {
-          const item = o.items.find(i => i.batchId === b.id);
-          if (item) {
-            return { ...b, bookedStock: Math.max(0, (b.bookedStock || 0) - item.quantity) };
+            return { 
+                ...b, 
+                stock: newStock,
+                onlineStock: newOnlineStock
+            };
           }
           return b;
         }));

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Menu, Bell, User, Globe, Cloud, CloudOff, RefreshCw, X, Keyboard, Layout as LayoutIcon } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Menu, Bell, User, Globe, Cloud, CloudOff, RefreshCw, X, Keyboard, Layout as LayoutIcon, Smartphone } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { cn } from '../utils';
 
 export default function Layout() {
-  const { store, syncStatus } = useStore();
+  const { store, syncStatus, updateStoreProfile } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -170,6 +170,24 @@ export default function Layout() {
             </div>
 
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 mr-2">
+                <span className="text-xs font-medium text-gray-600 hidden sm:inline">
+                  {store.onlineOrdersEnabled ? 'Store Live' : 'Store Offline'}
+                </span>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={store.onlineOrdersEnabled}
+                    onChange={(e) => {
+                      const enabled = e.target.checked;
+                      // Update context
+                      updateStoreProfile({ onlineOrdersEnabled: enabled });
+                    }}
+                  />
+                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                </label>
+              </div>
               <div className="flex items-center justify-center mr-1" title={syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Syncing...' : 'Sync Error'}>
                 {syncStatus === 'synced' && <Cloud size={18} className="text-green-500" />}
                 {syncStatus === 'syncing' && <RefreshCw size={18} className="text-blue-500 animate-spin" />}

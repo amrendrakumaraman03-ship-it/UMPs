@@ -36,9 +36,11 @@ const FACILITIES_OPTIONS = [
 ];
 
 export default function StorefrontDesigner() {
-  const { store, updateStoreProfile, vendorPosts, addVendorPost } = useStore();
+  const { store, updateStoreProfile, vendorPosts, addVendorPost, products, batches } = useStore();
   const [activeTab, setActiveTab] = useState<'profile' | 'feed' | 'theme'>('profile');
   const [showPreview, setShowPreview] = useState(false);
+  const [previewTab, setPreviewTab] = useState<'store' | 'products'>('store');
+  const [selectedMedicalGroup, setSelectedMedicalGroup] = useState<string | null>(null);
   
   // Profile State
   const [bio, setBio] = useState(store?.bio || '');
@@ -431,134 +433,209 @@ export default function StorefrontDesigner() {
             
             {/* Preview Content */}
             <div className="flex-1 overflow-y-auto bg-gray-50 scrollbar-hide">
-              {/* Hero Banner */}
-              <div className="relative h-48 w-full bg-gray-200">
-                {store.bannerUrl ? (
-                  <img src={store.bannerUrl} className="w-full h-full object-cover" alt="Banner" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
-                    <ImageIcon className="text-gray-300" size={48} />
+              {previewTab === 'store' ? (
+                <>
+                  {/* Hero Banner */}
+                  <div className="relative h-48 w-full bg-gray-200">
+                    {store.bannerUrl ? (
+                      <img src={store.bannerUrl} className="w-full h-full object-cover" alt="Banner" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200">
+                        <ImageIcon className="text-gray-300" size={48} />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                    
+                    {/* Back Button */}
+                    <button className="absolute top-8 left-4 w-8 h-8 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+                      <ArrowLeft size={18} />
+                    </button>
                   </div>
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                
-                {/* Back Button */}
-                <button className="absolute top-8 left-4 w-8 h-8 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white">
-                  <ArrowLeft size={18} />
-                </button>
-              </div>
 
-              {/* Store Info Header */}
-              <div className="px-4 -mt-10 relative z-10">
-                <div className="bg-white rounded-2xl shadow-xl p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="w-16 h-16 rounded-xl bg-white border-2 border-white shadow-md -mt-10 overflow-hidden">
-                      {store.logoUrl ? (
-                        <img src={store.logoUrl} className="w-full h-full object-cover" alt="Logo" />
-                      ) : (
-                        <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl">
-                          {store.name[0]}
+                  {/* Store Info Header */}
+                  <div className="px-4 -mt-10 relative z-10">
+                    <div className="bg-white rounded-2xl shadow-xl p-4 space-y-3">
+                      <div className="flex items-start justify-between">
+                        <div className="w-16 h-16 rounded-xl bg-white border-2 border-white shadow-md -mt-10 overflow-hidden">
+                          {store.logoUrl ? (
+                            <img src={store.logoUrl} className="w-full h-full object-cover" alt="Logo" />
+                          ) : (
+                            <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                              {store.name[0]}
+                            </div>
+                          )}
+                        </div>
+                        <Badge variant="success" className="bg-green-100 text-green-700 border-none">Open Now</Badge>
+                      </div>
+
+                      <div>
+                        <h2 className="text-xl font-black text-gray-900">{store.name}</h2>
+                        <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                          <MapPin size={10} /> {store.address}
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button 
+                          className="flex-1 py-2 rounded-lg text-white text-xs font-bold shadow-sm"
+                          style={{ backgroundColor: primaryColor }}
+                          onClick={() => setPreviewTab('products')}
+                        >
+                          Shop Now
+                        </button>
+                        <button 
+                          className="px-3 py-2 rounded-lg border flex items-center justify-center"
+                          style={{ borderColor: primaryColor, color: primaryColor }}
+                        >
+                          <Phone size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Facilities Horizontal Scroll */}
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between px-4 mb-3">
+                      <h3 className="font-bold text-gray-900 text-sm">Facilities</h3>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
+                      {selectedFacilities.length > 0 ? selectedFacilities.map(f => (
+                        <div key={f} className="flex-shrink-0 bg-white px-3 py-2 rounded-xl shadow-sm border border-gray-100 flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
+                            <Check size={14} />
+                          </div>
+                          <span className="text-[10px] font-bold text-gray-700 whitespace-nowrap">{f}</span>
+                        </div>
+                      )) : (
+                        <p className="text-xs text-gray-400 italic">No facilities listed</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* About Section */}
+                  <div className="mt-6 px-4">
+                    <h3 className="font-bold text-gray-900 text-sm mb-2">About Our Shop</h3>
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        {bio || "Welcome to our shop! We provide high-quality products and services to our customers. Visit us today for a great experience."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Feed Preview */}
+                  <div className="mt-6 px-4 pb-8">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-bold text-gray-900 text-sm">Latest Updates</h3>
+                      <button className="text-[10px] font-bold" style={{ color: primaryColor }}>View All</button>
+                    </div>
+                    <div className="space-y-4">
+                      {vendorPosts.length > 0 ? vendorPosts.slice(0, 2).map(post => (
+                        <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                          <div className="p-3 flex items-center gap-2 border-b border-gray-50">
+                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
+                              {store.name[0]}
+                            </div>
+                            <span className="text-[10px] font-bold text-gray-900">{store.name}</span>
+                          </div>
+                          <div className="p-3">
+                            <p className="text-[10px] text-gray-600 line-clamp-2">{post.content}</p>
+                          </div>
+                          {post.imageUrl && (
+                            <div className="w-full aspect-video">
+                              <img src={post.imageUrl} className="w-full h-full object-cover" alt="Post" />
+                            </div>
+                          )}
+                        </div>
+                      )) : (
+                        <div className="text-center py-6 bg-white rounded-2xl border border-dashed border-gray-200">
+                          <p className="text-[10px] text-gray-400">No updates yet</p>
                         </div>
                       )}
                     </div>
-                    <Badge variant="success" className="bg-green-100 text-green-700 border-none">Open Now</Badge>
+                  </div>
+                </>
+              ) : (
+                <div className="p-4 pt-8 space-y-4">
+                  <h2 className="text-xl font-black text-gray-900">Products</h2>
+                  
+                  {/* Medical Group Filters */}
+                  <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {['All', 'Antibiotics', 'Diabetic', 'B.P.'].map(group => (
+                      <button
+                        key={group}
+                        onClick={() => setSelectedMedicalGroup(group === 'All' ? null : group)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${
+                          (group === 'All' && !selectedMedicalGroup) || selectedMedicalGroup === group
+                            ? 'text-white shadow-sm'
+                            : 'bg-white text-gray-600 border border-gray-200'
+                        }`}
+                        style={{ backgroundColor: ((group === 'All' && !selectedMedicalGroup) || selectedMedicalGroup === group) ? primaryColor : undefined }}
+                      >
+                        {group}
+                      </button>
+                    ))}
                   </div>
 
-                  <div>
-                    <h2 className="text-xl font-black text-gray-900">{store.name}</h2>
-                    <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                      <MapPin size={10} /> {store.address}
-                    </p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button 
-                      className="flex-1 py-2 rounded-lg text-white text-xs font-bold shadow-sm"
-                      style={{ backgroundColor: primaryColor }}
-                    >
-                      Shop Now
-                    </button>
-                    <button 
-                      className="px-3 py-2 rounded-lg border flex items-center justify-center"
-                      style={{ borderColor: primaryColor, color: primaryColor }}
-                    >
-                      <Phone size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Facilities Horizontal Scroll */}
-              <div className="mt-6">
-                <div className="flex items-center justify-between px-4 mb-3">
-                  <h3 className="font-bold text-gray-900 text-sm">Facilities</h3>
-                </div>
-                <div className="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-hide">
-                  {selectedFacilities.length > 0 ? selectedFacilities.map(f => (
-                    <div key={f} className="flex-shrink-0 bg-white px-3 py-2 rounded-xl shadow-sm border border-gray-100 flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                        <Check size={14} />
-                      </div>
-                      <span className="text-[10px] font-bold text-gray-700 whitespace-nowrap">{f}</span>
-                    </div>
-                  )) : (
-                    <p className="text-xs text-gray-400 italic">No facilities listed</p>
-                  )}
-                </div>
-              </div>
-
-              {/* About Section */}
-              <div className="mt-6 px-4">
-                <h3 className="font-bold text-gray-900 text-sm mb-2">About Our Shop</h3>
-                <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                  <p className="text-xs text-gray-600 leading-relaxed">
-                    {bio || "Welcome to our shop! We provide high-quality products and services to our customers. Visit us today for a great experience."}
-                  </p>
-                </div>
-              </div>
-
-              {/* Feed Preview */}
-              <div className="mt-6 px-4 pb-8">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-bold text-gray-900 text-sm">Latest Updates</h3>
-                  <button className="text-[10px] font-bold" style={{ color: primaryColor }}>View All</button>
-                </div>
-                <div className="space-y-4">
-                  {vendorPosts.length > 0 ? vendorPosts.slice(0, 2).map(post => (
-                    <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                      <div className="p-3 flex items-center gap-2 border-b border-gray-50">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-[10px]">
-                          {store.name[0]}
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-900">{store.name}</span>
-                      </div>
-                      <div className="p-3">
-                        <p className="text-[10px] text-gray-600 line-clamp-2">{post.content}</p>
-                      </div>
-                      {post.imageUrl && (
-                        <div className="w-full aspect-video">
-                          <img src={post.imageUrl} className="w-full h-full object-cover" alt="Post" />
+                  {/* Product List */}
+                  <div className="space-y-3">
+                    {batches
+                      .filter(b => b.onlineStatus === 'LIVE' && b.stock > 0)
+                      .filter(b => {
+                        if (!selectedMedicalGroup) return true;
+                        const product = products.find(p => p.id === b.productId);
+                        return product?.subCategory === selectedMedicalGroup;
+                      })
+                      .map(batch => {
+                        const product = products.find(p => p.id === batch.productId);
+                        if (!product) return null;
+                        return (
+                          <div key={batch.id} className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex gap-3">
+                            <div className="w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <ImageIcon className="text-gray-400" size={24} />
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-sm font-bold text-gray-900 line-clamp-1">{product.name}</h4>
+                              <p className="text-[10px] text-gray-500 mb-1">{product.category} {product.subCategory ? `• ${product.subCategory}` : ''}</p>
+                              <div className="flex items-center justify-between mt-2">
+                                <span className="text-sm font-black" style={{ color: primaryColor }}>₹{batch.mrp}</span>
+                                <button 
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white"
+                                  style={{ backgroundColor: primaryColor }}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {batches.filter(b => b.onlineStatus === 'LIVE' && b.stock > 0).length === 0 && (
+                        <div className="text-center py-10">
+                          <p className="text-xs text-gray-500">No products available online.</p>
                         </div>
                       )}
-                    </div>
-                  )) : (
-                    <div className="text-center py-6 bg-white rounded-2xl border border-dashed border-gray-200">
-                      <p className="text-[10px] text-gray-400">No updates yet</p>
-                    </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Bottom Nav Bar (Preview) */}
             <div className="h-16 bg-white border-t border-gray-100 flex items-center justify-around px-4">
-              <div className="flex flex-col items-center gap-1" style={{ color: primaryColor }}>
+              <div 
+                className="flex flex-col items-center gap-1 cursor-pointer" 
+                style={{ color: previewTab === 'store' ? primaryColor : '#9ca3af' }}
+                onClick={() => setPreviewTab('store')}
+              >
                 <Smartphone size={18} />
                 <span className="text-[8px] font-bold">Store</span>
               </div>
-              <div className="flex flex-col items-center gap-1 text-gray-400">
+              <div 
+                className="flex flex-col items-center gap-1 cursor-pointer" 
+                style={{ color: previewTab === 'products' ? primaryColor : '#9ca3af' }}
+                onClick={() => setPreviewTab('products')}
+              >
                 <ShoppingCart size={18} />
-                <span className="text-[8px] font-bold">Cart</span>
+                <span className="text-[8px] font-bold">Products</span>
               </div>
               <div className="flex flex-col items-center gap-1 text-gray-400">
                 <User size={18} />
